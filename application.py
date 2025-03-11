@@ -289,6 +289,7 @@ def process_chat_async(tmp_file_path, api_key):
         with open(tmp_file_path, 'r') as f:
             user_id = f.readline().strip().split(":")[1].strip()
             analysis_id = f.readline().strip().split(":")[1].strip()
+            upload_id = f.readline().strip().split(":")[1].strip()
 
         # Update status to processing
         update_analysis_status(analysis_id, ProcessingStatus.processing)
@@ -518,7 +519,7 @@ def process_chat_async(tmp_file_path, api_key):
                 return
             
             # Update upload status
-            upload_update = supabase.table(SUPABASE_UPLOADS_TABLE).update({"status": "processed"}).eq("id", analysis_id).execute()
+            upload_update = supabase.table(SUPABASE_UPLOADS_TABLE).update({"status": "processed"}).eq("id", upload_id).execute()
             if "error" in upload_update and upload_update["error"]:
                 error_message = f"Failed to update upload status: {upload_update['error']['message']}"
                 update_analysis_status(analysis_id, ProcessingStatus.error, error_message)
@@ -528,7 +529,7 @@ def process_chat_async(tmp_file_path, api_key):
             relationship_update = supabase.table(SUPABASE_RELATIONSHIPS_TABLE).update({
                 "status": "analyzed",
                 "summary": ""
-            }).eq("upload_id", analysis_id).eq("analysis_id", analysis_id).execute()
+            }).eq("upload_id", upload_id).eq("analysis_id", analysis_id).execute()
             
             if "error" in relationship_update and relationship_update["error"]:
                 error_message = f"Failed to update relationship status: {relationship_update['error']['message']}"
@@ -568,6 +569,7 @@ def analyze_chat():
     file = request.files['file']
     user_id = request.form.get('user_id')
     analysis_id = request.form.get('analysis_id')
+    upload_id = request.form.get('upload_id')
     
     # Check if the file has content
     if file.filename == '':
@@ -591,6 +593,7 @@ def analyze_chat():
         with open(tmp_file_path, 'w') as f:
             f.write(f"user_id: {user_id}\n")
             f.write(f"analysis_id: {analysis_id}\n")
+            f.write(f"upload_id: {upload_id}\n")
         
         # Start processing in a background thread
         thread = threading.Thread(
@@ -604,7 +607,8 @@ def analyze_chat():
         return jsonify({
             "status": "success", 
             "message": "File received and processing started in the background",
-            "analysis_id": analysis_id
+            "analysis_id": analysis_id,
+            "upload_id": upload_id
         }), 200
         
     except Exception as e:
