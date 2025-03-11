@@ -16,17 +16,25 @@ from typing_extensions import TypedDict
 from dotenv import load_dotenv
 load_dotenv()
 from supabase import create_client, Client
+import logging
 
 # Supabase credentials
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-SUPABASE_ANALYSES_TABLE = os.getenv("SUPABASE_ANALYSES_TABLE")
-SUPABASE_UPLOADS_TABLE = os.getenv("SUPABASE_UPLOADS_TABLE")
-SUPABASE_RELATIONSHIPS_TABLE = os.getenv("SUPABASE_RELATIONSHIPS_TABLE")
+SUPABASE_ANALYSES_TABLE = "analyses"
+SUPABASE_UPLOADS_TABLE = "uploads"
+SUPABASE_RELATIONSHIPS_TABLE = "relationships"
+
 
 # Set up Flask app
 application = Flask(__name__)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Import necessary libraries for text processing
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -89,7 +97,9 @@ def update_analysis_status(analysis_id, status, error_message=None):
     Update the status of an analysis in the Supabase table.
     """
     update_data = {"status": status}
-    
+    logger.info(f"Error log entered update_analysis_status with analysis_id: {analysis_id}, status: {status}, error_message: {error_message}")
+    print(f"Error print entered update_analysis_status with analysis_id: {analysis_id}, status: {status}, error_message: {error_message}")
+
     # If there's an error message, include it
     if error_message and status == ProcessingStatus.error:
         update_data["error_message"] = error_message
@@ -98,11 +108,11 @@ def update_analysis_status(analysis_id, status, error_message=None):
         update_response = supabase.table(SUPABASE_ANALYSES_TABLE).update(update_data).eq("id", analysis_id).execute()
         
         if "error" in update_response and update_response["error"]:
-            print(f"Failed to update analysis status: {update_response['error']['message']}")
+            logger.info(f"Failed to update analysis status: {update_response['error']['message']}")
             return False
         return True
     except Exception as e:
-        print(f"Error updating analysis status: {str(e)}")
+        logger.info(f"Error hamada updating analysis status: {str(e)}")
         return False
 
 def parse_datetime(datetime_str):
@@ -548,6 +558,9 @@ def analyze_chat():
     Endpoint to receive and process a chat file asynchronously.
     Returns a 200 status code immediately after receiving the file.
     """
+    logger.info(f" log entered update_analysis_status with analysis_id")
+    print(f" print entered update_analysis_status with analysis_id")
+
     # Check if file is present in the request
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
