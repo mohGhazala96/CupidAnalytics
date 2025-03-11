@@ -619,6 +619,16 @@ def analyze_chat():
                 os.unlink(tmp.name)
             except:
                 pass
-
+@application.route('/', methods=['GET'])
+def health_check():
+    agent = request.headers.get('User-Agent', '')
+    if 'ELB-HealthChecker' in agent:
+        logger.info("Health check from ELB received")
+    else:
+        logger.info(f"Root path accessed by: {agent}")
+    return jsonify({
+    'status': 'healthy',
+    'service': 'file-processing-api'
+    }), 200
 if __name__ == '__main__':
     application.run(debug=True, host='0.0.0.0', port=8000, load_dotenv=True)
