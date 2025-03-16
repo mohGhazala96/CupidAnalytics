@@ -478,6 +478,13 @@ def process_chat_async(tmp_file_path, api_key):
         
         final_result["red_flags"] = red_flags
         final_result["green_flags"] = green_flags
+        
+        # logging 
+        logger.info(f"Final result: {final_result["relationship_summary"]}")
+        logger.info(f"partner0 summary: {partner0_personality}")
+        logger.info(f"partner1 summary: {partner0_personality}")
+        logger.info(f"Red flags: {red_flags}")
+        logger.info(f"Green flags: {green_flags}")
 
 
         try:
@@ -623,6 +630,7 @@ def analyze_chat():
                 os.unlink(tmp.name)
             except:
                 pass
+            
 @application.route('/', methods=['GET'])
 def health_check():
     agent = request.headers.get('User-Agent', '')
