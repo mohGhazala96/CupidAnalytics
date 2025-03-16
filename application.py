@@ -286,7 +286,7 @@ def process_chat_async(tmp_file_path, api_key):
             chat_history = f.read()
 
         #load the user_id and analysis_id from the file
-        with open(tmp_file_path, 'r') as f:
+        with open(tmp_file_path+"maher", 'r') as f:
             user_id = f.readline().strip().split(":")[1].strip()
             analysis_id = f.readline().strip().split(":")[1].strip()
             upload_id = f.readline().strip().split(":")[1].strip()
@@ -300,10 +300,10 @@ def process_chat_async(tmp_file_path, api_key):
         all_splits = text_splitter.split_documents(docs)
         
         # Initialize LLMs
-        llm = ChatOpenAI(temperature=0, model="gpt-4o", api_key=api_key).with_structured_output(
+        llm = ChatOpenAI(temperature=0, model="gpt-4o-mini", api_key=api_key).with_structured_output(
             ExtractedIncidents
         )
-        llm_unstructured = ChatOpenAI(temperature=0, model="gpt-4o", api_key=api_key)
+        llm_unstructured = ChatOpenAI(temperature=0, model="gpt-4o-mini", api_key=api_key)
         llm_formater = ChatOpenAI(temperature=0, model="gpt-4o-mini", api_key=api_key).with_structured_output(
             Relationship
         )
@@ -405,6 +405,8 @@ def process_chat_async(tmp_file_path, api_key):
             {input}
             """
         )
+
+        logger.info(f"batches: {batches[:1]}")
         
         # Format and process batches
         therapy_responses = []
@@ -430,6 +432,8 @@ def process_chat_async(tmp_file_path, api_key):
             formatted = llm_formater.invoke(prompt)
             formatted_responses.append(formatted)
         
+        logger.info(f"Formatted responses: {formatted_responses}")
+
         # Aggregate the therapy results
         aggregated_result = aggregate_relationships(formatted_responses, idToIncident)
         
@@ -482,9 +486,10 @@ def process_chat_async(tmp_file_path, api_key):
         # logging 
         logger.info(f"Final result: {final_result["relationship_summary"]}")
         logger.info(f"partner0 summary: {partner0_personality}")
-        logger.info(f"partner1 summary: {partner0_personality}")
+        logger.info(f"partner1 summary: {partner1_personality}")
         logger.info(f"Red flags: {red_flags}")
         logger.info(f"Green flags: {green_flags}")
+        logger.info(f"Incidents: {final_result["incidents"]}")
 
 
         try:
@@ -596,8 +601,10 @@ def analyze_chat():
             file.save(tmp.name)
             tmp_file_path = tmp.name
         
+        logger.info(f"File saved to: {tmp_file_path}")
+
         # Add the user_id and analysis_id to the file
-        with open(tmp_file_path, 'w') as f:
+        with open(tmp_file_path+"maher", 'w') as f:
             f.write(f"user_id: {user_id}\n")
             f.write(f"analysis_id: {analysis_id}\n")
             f.write(f"upload_id: {upload_id}\n")
