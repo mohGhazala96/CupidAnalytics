@@ -586,7 +586,9 @@ def analyze_chat():
     # Check if the file has content
     if file.filename == '':
         return jsonify({'error': 'Empty file'}), 400
-        
+    
+    logger.info(f"File received with user_id: {user_id}, analysis_id: {analysis_id}, upload_id: {upload_id}")
+
     # Get API key from request headers or environment
     api_key = request.headers.get('X-API-KEY', os.environ.get('OPENAI_API_KEY'))
     if not api_key:
