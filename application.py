@@ -30,6 +30,9 @@ SUPABASE_RELATIONSHIPS_TABLE = "relationships"
 application = Flask(__name__)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# Configure maximum content length to 50MB
+application.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -300,11 +303,11 @@ def process_chat_async(tmp_file_path, api_key):
         all_splits = text_splitter.split_documents(docs)
         
         # Initialize LLMs
-        llm = ChatOpenAI(temperature=0, model="gpt-4o-mini", api_key=api_key).with_structured_output(
+        llm = ChatOpenAI(temperature=0, model="gpt-4.1-mini", api_key=api_key).with_structured_output(
             ExtractedIncidents
         )
-        llm_unstructured = ChatOpenAI(temperature=0, model="gpt-4o-mini", api_key=api_key)
-        llm_formater = ChatOpenAI(temperature=0, model="gpt-4o-mini", api_key=api_key).with_structured_output(
+        llm_unstructured = ChatOpenAI(temperature=0, model="gpt-4.1-mini", api_key=api_key)
+        llm_formater = ChatOpenAI(temperature=0, model="gpt-4.1-mini", api_key=api_key).with_structured_output(
             Relationship
         )
         
