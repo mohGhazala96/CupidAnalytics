@@ -95,9 +95,10 @@ class ProcessingStatus(str, Enum):
     error = "error"
     ready = "ready"
 
-def update_analysis_status(analysis_id, status, error_message=None):
+def update_analysis_status(analysis_id, status, upload_id=None, error_message=None):
     """
     Update the status of an analysis in the Supabase table.
+    Also updates the relationship status when analysis status is set to processing.
     """
     update_data = {"status": status}
     logger.info(f"Error log entered update_analysis_status with analysis_id: {analysis_id}, status: {status}, error_message: {error_message}")
@@ -113,9 +114,20 @@ def update_analysis_status(analysis_id, status, error_message=None):
         if "error" in update_response and update_response["error"]:
             logger.info(f"Failed to update analysis status: {update_response['error']['message']}")
             return False
+
+        # If status is "processing" and upload_id is provided, also update relationship status
+        if status == ProcessingStatus.processing and upload_id:
+            relationship_update = supabase.table(SUPABASE_RELATIONSHIPS_TABLE).update({
+                "status": "processing"
+            }).eq("upload_id", upload_id).eq("analysis_id", analysis_id).execute()
+            
+            if "error" in relationship_update and relationship_update["error"]:
+                logger.info(f"Failed to update relationship status: {relationship_update['error']['message']}")
+                # Continue anyway, as this is not critical
+        
         return True
     except Exception as e:
-        logger.info(f"Error hamada updating analysis status: {str(e)}")
+        logger.info(f"Error updating status: {str(e)}")
         return False
 
 def parse_datetime(datetime_str):
@@ -283,6 +295,7 @@ def process_chat_async(tmp_file_path, api_key):
     """
     user_id = None
     analysis_id = None
+    upload_id = None
     try:
         # Read the content
         with open(tmp_file_path, 'r', encoding='utf-8') as f:
@@ -295,7 +308,7 @@ def process_chat_async(tmp_file_path, api_key):
             upload_id = f.readline().strip().split(":")[1].strip()
 
         # Update status to processing
-        update_analysis_status(analysis_id, ProcessingStatus.processing)
+        update_analysis_status(analysis_id, ProcessingStatus.processing, upload_id)
         
         # Split the text into manageable chunks
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=14000, chunk_overlap=400)
@@ -374,7 +387,7 @@ def process_chat_async(tmp_file_path, api_key):
                     incidents.append(i.model_dump())
         
         # Update progress
-        update_analysis_status(analysis_id, ProcessingStatus.processing)
+        update_analysis_status(analysis_id, ProcessingStatus.processing, upload_id)
         
         # Parse chat history
         parsed_messages = parse_chat_history(chat_history)
@@ -421,7 +434,7 @@ def process_chat_async(tmp_file_path, api_key):
             therapy_responses.append(response.content)
         
         # Update progress
-        update_analysis_status(analysis_id, ProcessingStatus.processing)
+        update_analysis_status(analysis_id, ProcessingStatus.processing, upload_id)
         
         # Format therapy responses
         format_prompt = ChatPromptTemplate.from_template(
@@ -532,14 +545,14 @@ def process_chat_async(tmp_file_path, api_key):
                 
             if "error" in update_response and update_response["error"]:
                 error_message = f"Failed to update analysis record: {update_response['error']['message']}"
-                update_analysis_status(analysis_id, ProcessingStatus.error, error_message)
+                update_analysis_status(analysis_id, ProcessingStatus.error, upload_id, error_message)
                 return
             
             # Update upload status
             upload_update = supabase.table(SUPABASE_UPLOADS_TABLE).update({"status": "processed"}).eq("id", upload_id).execute()
             if "error" in upload_update and upload_update["error"]:
                 error_message = f"Failed to update upload status: {upload_update['error']['message']}"
-                update_analysis_status(analysis_id, ProcessingStatus.error, error_message)
+                update_analysis_status(analysis_id, ProcessingStatus.error, upload_id, error_message)
                 return
             
             # Update relationship status
@@ -550,18 +563,18 @@ def process_chat_async(tmp_file_path, api_key):
             
             if "error" in relationship_update and relationship_update["error"]:
                 error_message = f"Failed to update relationship status: {relationship_update['error']['message']}"
-                update_analysis_status(analysis_id, ProcessingStatus.error, error_message)
+                update_analysis_status(analysis_id, ProcessingStatus.error, upload_id, error_message)
                 return
             
         except Exception as e:
             error_message = f"An unexpected error occurred during database updates: {str(e)}"
-            update_analysis_status(analysis_id, ProcessingStatus.error, error_message)
+            update_analysis_status(analysis_id, ProcessingStatus.error, upload_id, error_message)
 
     except Exception as e:
         error_message = f"Error processing file: {str(e)}"
         print(error_message)
         if analysis_id:
-            update_analysis_status(analysis_id, ProcessingStatus.error, error_message)
+            update_analysis_status(analysis_id, ProcessingStatus.error, upload_id, error_message)
     finally:
         # Clean up temporary file
         try:
@@ -601,7 +614,7 @@ def analyze_chat():
     
     try:
         # Set initial status to pending
-        update_analysis_status(analysis_id, ProcessingStatus.pending)
+        update_analysis_status(analysis_id, ProcessingStatus.pending, upload_id)
         
         # Create a temporary file to store the uploaded content
         with tempfile.NamedTemporaryFile(delete=False, mode='wb') as tmp:
@@ -635,7 +648,7 @@ def analyze_chat():
     except Exception as e:
         error_message = str(e)
         # Set status to error
-        update_analysis_status(analysis_id, ProcessingStatus.error, error_message)
+        update_analysis_status(analysis_id, ProcessingStatus.error, upload_id, error_message)
         return jsonify({'error': error_message}), 500
     finally:
         # Clean up temporary file if something went wrong before thread started
