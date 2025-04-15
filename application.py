@@ -298,7 +298,7 @@ def process_chat_async(tmp_file_path, api_key):
         update_analysis_status(analysis_id, ProcessingStatus.processing)
         
         # Split the text into manageable chunks
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=8000, chunk_overlap=400)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=14000, chunk_overlap=400)
         docs = [Document(page_content=chat_history)]
         all_splits = text_splitter.split_documents(docs)
         
@@ -314,33 +314,35 @@ def process_chat_async(tmp_file_path, api_key):
         # Define the tagging prompt
         tagging_prompt = ChatPromptTemplate.from_template(
             """
-            You are an AI tasked with analyzing chat histories to identify significant conflicts between partners. A incident is defined as a meaningful disagreement, argument, or tension between the participants. Many chat exchanges may not contain any incidents. Your job is to focus exclusively on interactions that meet the criteria for a significant incident. the time in the chat is written in this formate [DD/MM/YYYY, H:mm:ss AM/PM].
+            You are an AI tasked with analyzing chat histories to identify significant conflicts between partners. A significant incident involves a clear disagreement, argument, or period of notable tension that potentially impacts the relationship negatively. Your goal is to extract ONLY these significant incidents, ignoring minor or quickly resolved issues. The time in the chat is written in this format [DD/MM/YYYY, H:mm:ss AM/PM].
 
-            For each detected incident, provide the following:
-                1. Title: A title that breifly descripe the incident.
-                2. Description: Descripe breifly the incident.
-                3. Start Time: The exact timestamp when the incident begins, write it using this formate "%d/%m/%Y, %I:%M:%S %p
-                4. End Time: The exact timestamp when the incident concludes, write it using this formate "%d/%m/%Y, %I:%M:%S %p
-                5. Tone: Can be ["Negative", "Neutral", "Positive"]
-                6. Intensity: Can be ["High" or "Low"]
+            For each detected significant incident, provide the following:
+                1. Title: A title that briefly describes the incident.
+                2. Description: Briefly describe the incident, focusing on the core conflict.
+                3. Start Time: The exact timestamp when the incident begins, using the format "%d/%m/%Y, %I:%M:%S %p".
+                4. End Time: The exact timestamp when the incident concludes, using the format "%d/%m/%Y, %I:%M:%S %p".
+                5. Tone: Overall tone of the incident ["Negative", "Neutral", "Positive"]. Negative is expected for conflicts.
+                6. Intensity: Overall intensity of the conflict ["High" or "Low"]. Focus extraction on HIGH intensity incidents.
 
-            Guidelines:
-                •	Many chat exchanges will not include incidents. Do not extract casual conversation, lighthearted banter, or purely humorous exchanges.
-                •	Focus only on interactions with meaningful tension or disagree  ment that could impact the relationship dynamics.
-                • Negative Tones
-                    •	Definition: Convey dissatisfaction, conflict, or emotional distress. Often evoke tension or discomfort in communication.
-                    •	Examples: Angry, frustrated, defensive, dismissive.
+            Guidelines for Identifying SIGNIFICANT Incidents:
+                •   Look for interactions with clear, sustained tension, escalation, strong negative emotions (anger, frustration, contempt, accusations), or discussion of core relationship problems.
+                •   An incident should typically span multiple message exchanges and show difficulty in resolution.
+                •   Prioritize conflicts that reveal underlying relationship dynamics or recurring issues.
 
-                • Neutral Tones
-                    •	Definition: Impartial and balanced, focusing on clarity and facts without strong emotional influence.
-                    •	Examples: Informative, objective, polite, professional, calm.
+            What NOT to Extract (Examples of NON-Significant Incidents):
+                •   Casual conversation, jokes, planning, or lighthearted banter.
+                •   Sarcasm, inside jokes, or subtle humor.
+                •   Simple statements of fact or preference without emotional charge (e.g., "I don't like that movie").
+                •   Minor disagreements or misunderstandings that are clarified and resolved within 1-2 messages.
+                •   Brief moments of annoyance or sarcasm that don't escalate or lead to a larger argument.
+                •   Playful teasing, even if slightly edgy.
 
-                • Positive Tones
-                    •	Definition: Reflect optimism, support, or encouragement, fostering connection and goodwill.
-                    •	Examples: Friendly, empathetic, cheerful, supportive, hopeful.
+            Tone Definitions (Use to assess incident, but TONE alone doesn't define significance):
+                •   Negative: Conveys dissatisfaction, conflict, emotional distress (e.g., angry, frustrated, defensive, dismissive, contemptuous).
+                •   Neutral: Impartial, factual, calm (e.g., informative, objective, polite).
+                •   Positive: Optimistic, supportive, connecting (e.g., friendly, empathetic, cheerful).
 
-            If no incident is detected, return an empty list:
-
+            If no significant incident meeting these criteria is detected in the passage, return an empty list:
             []
 
             By focusing only on significant conflicts, ensure the output is concise and relevant to meaningful relational analysis.
@@ -386,7 +388,7 @@ def process_chat_async(tmp_file_path, api_key):
             idToIncident[str(inc["incident_id"])] = inc
         
         # Split incidents into batches
-        batches = split_into_batches(incidents, 20)
+        batches = split_into_batches(incidents, 40)
         
         # Define relationship analysis prompt
         relationship_prompt = ChatPromptTemplate.from_template(
@@ -397,7 +399,7 @@ def process_chat_async(tmp_file_path, api_key):
                 1.	For Each Incident:
                 •	ID: The unique identifier for the incident
                 •	Title: A title that briefly describes the incident.
-                •	Intensity Rating: How significant the incident is to the relationship compared to other incidents, Intensity value is [1 to 10], 1 being most significant.
+                •	Intensity Rating: How significant the incident is to the relationship compared to other incidents, Intensity value is [1 to 10], 10 being most significant.
                 •	Objective Opinion: as an objective person report your analysis of the incident, including who is at fault if necessary, and why is faulty and what is the right things that should have been done.
                 •	Pillars: According to John Gottman, specify if the incident shows any of the "Four Horsemen": criticism, defensiveness, contempt, or stonewalling.
                 2.	For All Incidents:
