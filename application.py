@@ -303,10 +303,10 @@ def process_chat_async(tmp_file_path, api_key):
         all_splits = text_splitter.split_documents(docs)
         
         # Initialize LLMs
-        llm = ChatOpenAI(temperature=0, model="gpt-4.1-mini", api_key=api_key).with_structured_output(
+        llm = ChatOpenAI(temperature=0, model="gpt-4.1", api_key=api_key).with_structured_output(
             ExtractedIncidents
         )
-        llm_unstructured = ChatOpenAI(temperature=0, model="gpt-4.1-mini", api_key=api_key)
+        llm_unstructured = ChatOpenAI(temperature=0, model="gpt-4.1", api_key=api_key)
         llm_formater = ChatOpenAI(temperature=0, model="gpt-4.1-mini", api_key=api_key).with_structured_output(
             Relationship
         )
