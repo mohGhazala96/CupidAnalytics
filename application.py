@@ -25,6 +25,8 @@ SUPABASE_ANALYSES_TABLE = "analyses"
 SUPABASE_UPLOADS_TABLE = "uploads"
 SUPABASE_RELATIONSHIPS_TABLE = "relationships"
 
+main_model = "gpt-4.1"
+format_model = "gpt-4.1-mini"
 
 # Set up Flask app
 application = Flask(__name__)
@@ -82,6 +84,13 @@ class RelationshipIncident(BaseModel):
 class Partner(BaseModel):
     name: str = Field(description="The name of the partner")
     personalityReport: str = Field(description="A detailed personality report of the partner")
+
+class StructuredRelationshipSummary(BaseModel):
+    overview: str = Field(description="Overview of the relationship dynamics and patterns")
+    problems: str = Field(description="Most significant problems in the relationship, with examples")
+    solutions: str = Field(description="Potential solutions for the identified problems")
+    positives: str = Field(description="Positive feedback and relationship strengths") 
+    conclusion: str = Field(description="Conclusion summarizing the relationship assessment")
 
 class Relationship(BaseModel):
     Incidents: List[RelationshipIncident] = Field(description="A list of incidents that occurred in the relationship")
@@ -316,11 +325,11 @@ def process_chat_async(tmp_file_path, api_key):
         all_splits = text_splitter.split_documents(docs)
         
         # Initialize LLMs
-        llm = ChatOpenAI(temperature=0, model="gpt-4.1", api_key=api_key).with_structured_output(
+        llm = ChatOpenAI(temperature=0, model=main_model, api_key=api_key).with_structured_output(
             ExtractedIncidents
         )
-        llm_unstructured = ChatOpenAI(temperature=0, model="gpt-4.1", api_key=api_key)
-        llm_formater = ChatOpenAI(temperature=0, model="gpt-4.1-mini", api_key=api_key).with_structured_output(
+        llm_unstructured = ChatOpenAI(temperature=0, model=main_model, api_key=api_key)
+        llm_formater = ChatOpenAI(temperature=0, model=format_model, api_key=api_key).with_structured_output(
             Relationship
         )
         
@@ -416,7 +425,7 @@ def process_chat_async(tmp_file_path, api_key):
                 •	Objective Opinion: as an objective person report your analysis of the incident, including who is at fault if necessary, and why is faulty and what is the right things that should have been done.
                 •	Pillars: According to John Gottman, specify if the incident shows any of the "Four Horsemen": criticism, defensiveness, contempt, or stonewalling.
                 2.	For All Incidents:
-                •	Report of the Relationship: List the most significant problems in details, for each significant problem you must support it by real examples that occurred in the chat to support your analysis, and include the Incident ID as reference to each example. Then provide potential solutions, and any positive feedback that may exist, support it with examples as well. Finally, provide a detailed overview (analysis) of the relationship and don't be vague.
+                •	Report of the Relationship: List the (Most Significant Problems) in details, for each significant problem you must support it by real examples that occurred in the chat to support your analysis, and include the Incident ID as reference to each example. Then provide (potential solutions), and any positive feedback that may exist (Positive Feedback & Strengths), support it with examples as well. Finally, provide a detailed overview and analysis of the relationship and don't be vague (verview of the relationship) then finally provide (conclusion).
                 •	For each partner, provide his/her name and a personality report. and use the name in the chat snippets.    
                     •	Personality report: You are a psychologist specializing in personality assessment. Provide a concise yet thorough analysis by detailing each individual's communication style and emotional patterns (how they express themselves, handle conflict, and show emotions), exploring any insecurities and motivations (what appears to drive or concern them), and highlighting both their positive and negative qualities (strengths, weaknesses, and potential blind spots). Conclude with a brief overview of how these traits may shape their interactions and offer practical suggestions for improving their dynamic.
             chat snippets:
@@ -461,12 +470,46 @@ def process_chat_async(tmp_file_path, api_key):
             llm_unstructured
         ).content
         
+        # Create a structured summary formatter
+        structure_summary_prompt = ChatPromptTemplate.from_template(
+            """
+            Please format the following relationship analysis into these specific sections:
+            
+            1. Overview of the relationship - Provide a general assessment of the relationship dynamics and patterns
+            2. Most Significant Problems - Clearly identify and explain the key issues affecting the relationship
+            3. Potential Solutions - Offer practical advice and approaches to address the identified problems
+            4. Positive Feedback & Strengths - Highlight positive aspects and strengths of the relationship
+            5. Conclusion - Summarize the overall assessment and prognosis
+            
+            Make each section comprehensive but focused. Ensure all important information from the original analysis is preserved.
+            
+            Original relationship analysis:
+            {input}
+            """
+        )
+        
+        # Initialize llm with structured output for summary
+        llm_summary_formatter = ChatOpenAI(temperature=0, model=main_model, api_key=api_key).with_structured_output(
+            StructuredRelationshipSummary
+        )
+        
+        # Format the relationship summary into structured sections
+        structured_summary_prompt = structure_summary_prompt.invoke({"input": relationship_summary})
+        structured_summary = llm_summary_formatter.invoke(structured_summary_prompt)
+        
         partner_keys = list(aggregated_result["partner_summaries"].keys())
         
         # Prepare the final response
         final_result = {
             "incidents": aggregated_result["incidents"],
             "relationship_summary": relationship_summary,
+            "structured_summary": {
+                "overview": structured_summary.overview,
+                "problems": structured_summary.problems,
+                "solutions": structured_summary.solutions,
+                "positives": structured_summary.positives,
+                "conclusion": structured_summary.conclusion
+            }
         }
 
         if len(partner_keys) >= 2:
@@ -503,6 +546,11 @@ def process_chat_async(tmp_file_path, api_key):
         
         # logging 
         logger.info(f"Final result: {final_result["relationship_summary"]}")
+        logger.info(f"Structured summary overview: {structured_summary.overview[:100]}...")
+        logger.info(f"Structured summary problems: {structured_summary.problems[:100]}...")
+        logger.info(f"Structured summary solutions: {structured_summary.solutions[:100]}...")
+        logger.info(f"Structured summary positives: {structured_summary.positives[:100]}...")
+        logger.info(f"Structured summary conclusion: {structured_summary.conclusion[:100]}...")
         logger.info(f"partner0 summary: {partner0_personality}")
         logger.info(f"partner1 summary: {partner1_personality}")
         logger.info(f"Red flags: {red_flags}")
@@ -515,6 +563,13 @@ def process_chat_async(tmp_file_path, api_key):
             update_response = supabase.table(SUPABASE_ANALYSES_TABLE).update({
                 "status": ProcessingStatus.ready,
                 "summary": final_result["relationship_summary"],
+                "summary_structured": json.dumps({
+                    "overview": structured_summary.overview,
+                    "problems": structured_summary.problems,
+                    "solutions": structured_summary.solutions,
+                    "positives": structured_summary.positives,
+                    "conclusion": structured_summary.conclusion
+                }),
                 "red_flags": red_flags,
                 "green_flags": green_flags,
                 "personality_summaries": json.dumps({
