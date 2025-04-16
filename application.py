@@ -473,17 +473,7 @@ def process_chat_async(tmp_file_path, api_key):
         # Create a structured summary formatter
         structure_summary_prompt = ChatPromptTemplate.from_template(
             """
-            Please format the following relationship analysis into these specific sections:
-            
-            1. Overview of the relationship - Provide a general assessment of the relationship dynamics and patterns
-            2. Most Significant Problems - Clearly identify and explain the key issues affecting the relationship
-            3. Potential Solutions - Offer practical advice and approaches to address the identified problems
-            4. Positive Feedback & Strengths - Highlight positive aspects and strengths of the relationship
-            5. Conclusion - Summarize the overall assessment and prognosis
-            
-            Make each section comprehensive but focused. Ensure all important information from the original analysis is preserved.
-            
-            Original relationship analysis:
+            Rewrite the following into the format, don't summarize or change anything, use the exact markdown format, just copy the exact text in the provided format.
             {input}
             """
         )
